@@ -59,6 +59,10 @@ spec:
           {{- if .defaultACMEDNS01ChallengeProvider }}
           - --default-acme-issuer-dns01-provider-name={{ .defaultACMEDNS01ChallengeProvider }}
           {{- end }}
+          {{- if .Values.servedClusterConfig.secretName }}
+          - --served-cluster-secret-name={{ .Values.servedClusterConfig.secretName }}
+          - --served-cluster-kube-config-key={{ .Values.servedClusterConfig.kubeConfigKey }}
+          {{- end}}
           {{- end }}
           env:
           - name: POD_NAMESPACE
