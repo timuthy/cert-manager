@@ -78,7 +78,7 @@ func New(ctx *controllerpkg.Context) *Controller {
 	ctrl.clusterIssuerLister = clusterIssuerInformer.Lister()
 	ctrl.syncedFuncs = append(ctrl.syncedFuncs, clusterIssuerInformer.Informer().HasSynced)
 
-	secretsInformer := ctrl.KubeSharedInformerFactory.Core().V1().Secrets()
+	secretsInformer := ctrl.ServedClusterSharedInformerFactory.Core().V1().Secrets()
 	secretsInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		DeleteFunc: ctrl.secretDeleted,
 	})

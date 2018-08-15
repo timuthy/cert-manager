@@ -44,7 +44,10 @@ import (
 	kubeinformers "k8s.io/client-go/informers"
 )
 
-const controllerAgentName = "cert-manager"
+const (
+	controllerAgentName = "cert-manager"
+	resyncRate          = time.Second * 30
+)
 
 func Run(opts *options.ControllerOptions, stopCh <-chan struct{}) {
 	ctx, kubeCfg, err := buildControllerContext(opts)
@@ -77,6 +80,9 @@ func Run(opts *options.ControllerOptions, stopCh <-chan struct{}) {
 		glog.V(4).Infof("Starting shared informer factory")
 		ctx.SharedInformerFactory.Start(stopCh)
 		ctx.KubeSharedInformerFactory.Start(stopCh)
+		if ctx.ServesOutsideCluster {
+			ctx.ServedClusterSharedInformerFactory.Start(stopCh)
+		}
 		wg.Wait()
 		glog.Fatalf("Control loops exited")
 	}
@@ -135,9 +141,9 @@ func buildControllerContext(opts *options.ControllerOptions) (*controller.Contex
 	eventBroadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: cl.CoreV1().Events("")})
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: controllerAgentName})
 
-	sharedInformerFactory := informers.NewSharedInformerFactory(intcl, time.Second*30)
-	kubeSharedInformerFactory := kubeinformers.NewSharedInformerFactory(cl, time.Second*30)
-	return &controller.Context{
+	sharedInformerFactory := informers.NewSharedInformerFactory(intcl, resyncRate)
+	kubeSharedInformerFactory := kubeinformers.NewSharedInformerFactory(cl, resyncRate)
+	context := &controller.Context{
 		Client:                    cl,
 		CMClient:                  intcl,
 		Recorder:                  recorder,
@@ -159,7 +165,46 @@ func buildControllerContext(opts *options.ControllerOptions) (*controller.Contex
 			DefaultACMEIssuerChallengeType:     opts.DefaultACMEIssuerChallengeType,
 			DefaultACMEIssuerDNS01ProviderName: opts.DefaultACMEIssuerDNS01ProviderName,
 		},
-	}, kubeCfg, nil
+	}
+
+	context.ServesOutsideCluster = len(opts.ServedClusterSecretName) > 0
+	if context.ServesOutsideCluster {
+		var err error
+		context, err = addServedClusterConfig(context, opts.ClusterResourceNamespace,
+			opts.ServedClusterSecretName, opts.ServedClusterKubeConfigKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		glog.Infoln("Cert-Manager will serve an outside cluster")
+	} else {
+		context.ServedClusterClient = cl
+		context.ServedClusterSharedInformerFactory = kubeSharedInformerFactory
+		glog.Infoln("Cert-Manager will serve this cluster")
+	}
+	return context, kubeCfg, nil
+}
+
+func addServedClusterConfig(context *controller.Context, namespace, secretname, key string) (*controller.Context, error) {
+	// Load the users Kubernetes config
+	kubeCfg, err := kube.ConfigFromSecret(namespace, secretname, key)
+
+	if err != nil {
+		return nil, fmt.Errorf("error creating rest config: %s", err.Error())
+	}
+
+	// Create a Kubernetes api client
+	cl, err := kubernetes.NewForConfig(kubeCfg)
+
+	if err != nil {
+		return nil, fmt.Errorf("error creating kubernetes client: %s", err.Error())
+	}
+
+	kubeSharedInformerFactory := kubeinformers.NewSharedInformerFactory(cl, resyncRate)
+
+	context.ServedClusterClient = cl
+	context.ServedClusterSharedInformerFactory = kubeSharedInformerFactory
+
+	return context, nil
 }
 
 func startLeaderElection(opts *options.ControllerOptions, leaderElectionClient kubernetes.Interface, recorder record.EventRecorder, run func(<-chan struct{})) {

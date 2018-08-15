@@ -115,9 +115,8 @@ func (c *Controller) buildCertificates(ing *extv1beta1.Ingress) (new, update []*
 
 		crt := &v1alpha1.Certificate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:            tls.SecretName,
-				Namespace:       ing.Namespace,
-				OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(ing, ingressGVK)},
+				Name:      tls.SecretName,
+				Namespace: ing.Namespace,
 			},
 			Spec: v1alpha1.CertificateSpec{
 				DNSNames:   tls.Hosts,
@@ -127,6 +126,10 @@ func (c *Controller) buildCertificates(ing *extv1beta1.Ingress) (new, update []*
 					Kind: issuerKind,
 				},
 			},
+		}
+
+		if !c.watchesOutsideCluster {
+			crt.OwnerReferences = []metav1.OwnerReference{*metav1.NewControllerRef(ing, ingressGVK)}
 		}
 
 		err = c.setIssuerSpecificConfig(crt, issuer, ing, tls)

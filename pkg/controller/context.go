@@ -34,6 +34,8 @@ import (
 type Context struct {
 	// Client is a Kubernetes clientset
 	Client kubernetes.Interface
+	// Client is a Kubernetes clientset for the served cluster
+	ServedClusterClient kubernetes.Interface
 	// CMClient is a cert-manager clientset
 	CMClient clientset.Interface
 	// Recorder to record events to
@@ -42,6 +44,9 @@ type Context struct {
 	// KubeSharedInformerFactory can be used to obtain shared
 	// SharedIndexInformer instances for Kubernetes types
 	KubeSharedInformerFactory kubeinformers.SharedInformerFactory
+	// KubeSharedInformerFactory can be used to obtain shared
+	// SharedIndexInformer instances for Kubernetes types of the served cluster
+	ServedClusterSharedInformerFactory kubeinformers.SharedInformerFactory
 	// SharedInformerFactory can be used to obtain shared SharedIndexInformer
 	// instances
 	SharedInformerFactory informers.SharedInformerFactory
@@ -49,6 +54,8 @@ type Context struct {
 	IssuerOptions
 	ACMEOptions
 	IngressShimOptions
+
+	ServesOutsideCluster bool
 }
 
 func (c *Context) IssuerFactory() IssuerFactory {

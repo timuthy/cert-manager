@@ -216,7 +216,8 @@ func issuerKind(crt *v1alpha1.Certificate) string {
 }
 
 func (c *Controller) updateSecret(crt *v1alpha1.Certificate, namespace string, cert, key []byte) (*api.Secret, error) {
-	secret, err := c.Client.CoreV1().Secrets(namespace).Get(crt.Spec.SecretName, metav1.GetOptions{})
+	secrets := c.ServedClusterClient.CoreV1().Secrets(namespace)
+	secret, err := secrets.Get(crt.Spec.SecretName, metav1.GetOptions{})
 	if err != nil && !k8sErrors.IsNotFound(err) {
 		return nil, err
 	}
@@ -257,9 +258,9 @@ func (c *Controller) updateSecret(crt *v1alpha1.Certificate, namespace string, c
 
 	// if it is a new resource
 	if secret.SelfLink == "" {
-		secret, err = c.Client.CoreV1().Secrets(namespace).Create(secret)
+		secret, err = secrets.Create(secret)
 	} else {
-		secret, err = c.Client.CoreV1().Secrets(namespace).Update(secret)
+		secret, err = secrets.Update(secret)
 	}
 	if err != nil {
 		return nil, err
