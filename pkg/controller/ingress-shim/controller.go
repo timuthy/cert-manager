@@ -70,6 +70,8 @@ type Controller struct {
 	defaults    defaults
 
 	watchesOutsideCluster bool
+
+	clusterResourceNamespace string
 }
 
 // New returns a new Certificates controller. It sets up the informer handler
@@ -84,6 +86,7 @@ func New(
 	recorder record.EventRecorder,
 	defaults defaults,
 	watchesOutsideCluster bool,
+	clusterResourceNamespace string,
 ) *Controller {
 	ctrl := &Controller{Client: client, CMClient: cmClient, Recorder: recorder, defaults: defaults}
 	ctrl.syncHandler = ctrl.processNextWorkItem
@@ -104,6 +107,7 @@ func New(
 
 	ctrl.watchesOutsideCluster = watchesOutsideCluster
 
+	ctrl.clusterResourceNamespace = clusterResourceNamespace
 	return ctrl
 }
 
@@ -196,7 +200,7 @@ func (c *Controller) processNextWorkItem(ctx context.Context, key string) error 
 		return nil
 	}
 
-	crt, err := c.ingressLister.Ingresses(namespace).Get(name)
+	ing, err := c.ingressLister.Ingresses(namespace).Get(name)
 
 	if err != nil {
 		if k8sErrors.IsNotFound(err) {
@@ -207,7 +211,7 @@ func (c *Controller) processNextWorkItem(ctx context.Context, key string) error 
 		return err
 	}
 
-	return c.Sync(ctx, crt)
+	return c.Sync(ctx, ing)
 }
 
 var keyFunc = controllerpkg.KeyFunc
@@ -224,6 +228,7 @@ func init() {
 			ctx.Recorder,
 			defaults{ctx.DefaultIssuerName, ctx.DefaultIssuerKind, ctx.DefaultACMEIssuerChallengeType, ctx.DefaultACMEIssuerDNS01ProviderName},
 			ctx.ServesOutsideCluster,
+			ctx.ClusterResourceNamespace,
 		).Run
 	})
 }

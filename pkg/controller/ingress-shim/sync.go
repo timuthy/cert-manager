@@ -92,6 +92,7 @@ func (c *Controller) Sync(ctx context.Context, ing *extv1beta1.Ingress) error {
 
 func (c *Controller) buildCertificates(ing *extv1beta1.Ingress) (new, update []*v1alpha1.Certificate, _ error) {
 	issuerName, issuerKind := c.issuerForIngress(ing)
+	// TODO timuthy - change this to support issuers and not only clusterissuers
 	issuer, err := c.getGenericIssuer(ing.Namespace, issuerName, issuerKind)
 	if err != nil {
 		return nil, nil, err
@@ -108,15 +109,31 @@ func (c *Controller) buildCertificates(ing *extv1beta1.Ingress) (new, update []*
 			return nil, nil, fmt.Errorf("TLS entry %d for ingress %q must specify a secretName", i, ing.Name)
 		}
 
-		existingCrt, err := c.certificateLister.Certificates(ing.Namespace).Get(tls.SecretName)
+		var certName string
+		if c.watchesOutsideCluster {
+			certName = ing.Namespace + "." + tls.SecretName
+		} else {
+			certName = tls.SecretName
+		}
+
+		var certNamespace string
+		if c.watchesOutsideCluster && issuerKind == v1alpha1.ClusterIssuerKind {
+			certNamespace = c.clusterResourceNamespace
+		} else if c.watchesOutsideCluster && issuerKind == v1alpha1.ClusterIssuerKind {
+			certNamespace = issuer.GetObjectMeta().Namespace
+		} else {
+			certNamespace = ing.Namespace
+		}
+
+		existingCrt, err := c.certificateLister.Certificates(certNamespace).Get(certName)
 		if !apierrors.IsNotFound(err) && err != nil {
 			return nil, nil, err
 		}
 
 		crt := &v1alpha1.Certificate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      tls.SecretName,
-				Namespace: ing.Namespace,
+				Name:      certName,
+				Namespace: certNamespace,
 			},
 			Spec: v1alpha1.CertificateSpec{
 				DNSNames:   tls.Hosts,

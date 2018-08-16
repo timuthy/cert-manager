@@ -34,18 +34,27 @@ func (c *Controller) certificatesForSecret(secret *corev1.Secret) ([]*v1alpha1.C
 	}
 
 	var affected []*v1alpha1.Certificate
-	for _, crt := range crts {
-		if crt.Namespace != secret.Namespace {
-			continue
+	if c.ServesOutsideCluster {
+		for _, crt := range crts {
+			if crt.Name == secret.Namespace+"."+secret.Name {
+				affected = append(affected, crt)
+			}
 		}
-		if crt.Spec.SecretName == secret.Name {
-			affected = append(affected, crt)
+	} else {
+		for _, crt := range crts {
+			if crt.Namespace != secret.Namespace {
+				continue
+			}
+			if crt.Spec.SecretName == secret.Name {
+				affected = append(affected, crt)
+			}
 		}
 	}
 
 	return affected, nil
 }
 
+// TODO timuthy - adjust to served cluster feature
 func (c *Controller) certificatesForIngress(ing *extv1beta1.Ingress) ([]*v1alpha1.Certificate, error) {
 	crts, err := c.certificateLister.List(labels.NewSelector())
 

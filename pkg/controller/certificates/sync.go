@@ -139,7 +139,11 @@ func (c *Controller) Sync(ctx context.Context, crt *v1alpha1.Certificate) (err e
 	}
 
 	// grab existing certificate and validate private key
-	cert, err := kube.SecretTLSCert(c.secretLister, crtCopy.Namespace, crtCopy.Spec.SecretName)
+	secretNamespace, err := c.extractNamespace(crtCopy)
+	if err != nil {
+		return err
+	}
+	cert, err := kube.SecretTLSCert(c.secretLister, secretNamespace, crtCopy.Spec.SecretName)
 	// if an error is returned, and that error is something other than
 	// IsNotFound or invalid data, then we should return the error.
 	if err != nil && !k8sErrors.IsNotFound(err) && !errors.IsInvalidData(err) {
@@ -149,7 +153,7 @@ func (c *Controller) Sync(ctx context.Context, crt *v1alpha1.Certificate) (err e
 	// as there is an existing certificate, or we may create one below, we will
 	// run scheduleRenewal to schedule a renewal if required at the end of
 	// execution.
-	defer c.scheduleRenewal(crtCopy)
+	defer c.scheduleRenewal(crtCopy, secretNamespace)
 
 	// if the certificate was not found, or the certificate data is invalid, we
 	// should issue a new certificate.
@@ -183,7 +187,7 @@ func (c *Controller) getGenericIssuer(crt *v1alpha1.Certificate) (v1alpha1.Gener
 	}
 }
 
-func (c *Controller) scheduleRenewal(crt *v1alpha1.Certificate) {
+func (c *Controller) scheduleRenewal(crt *v1alpha1.Certificate, secretNamespace string) {
 	key, err := keyFunc(crt)
 
 	if err != nil {
@@ -290,7 +294,11 @@ func (c *Controller) issue(ctx context.Context, issuer issuer.Interface, crt *v1
 		return err
 	}
 
-	if _, err := c.updateSecret(crt, crt.Namespace, cert, key); err != nil {
+	secretNamespace, err := c.extractNamespace(crt)
+	if err != nil {
+		return err
+	}
+	if _, err := c.updateSecret(crt, secretNamespace, cert, key); err != nil {
 		s := messageErrorSavingCertificate + err.Error()
 		glog.Info(s)
 		c.Recorder.Event(crt, api.EventTypeWarning, errorSavingCertificate, s)
@@ -327,7 +335,11 @@ func (c *Controller) renew(ctx context.Context, issuer issuer.Interface, crt *v1
 		return err
 	}
 
-	if _, err := c.updateSecret(crt, crt.Namespace, cert, key); err != nil {
+	secretNamespace, err := c.extractNamespace(crt)
+	if err != nil {
+		return err
+	}
+	if _, err := c.updateSecret(crt, secretNamespace, cert, key); err != nil {
 		s := messageErrorSavingCertificate + err.Error()
 		glog.Info(s)
 		c.Recorder.Event(crt, api.EventTypeWarning, errorSavingCertificate, s)
@@ -350,4 +362,18 @@ func (c *Controller) updateCertificateStatus(old, new *v1alpha1.Certificate) (*v
 	// server with the /status subresource enabled and/or subresource support
 	// for CRDs (https://github.com/kubernetes/kubernetes/issues/38113)
 	return c.CMClient.CertmanagerV1alpha1().Certificates(new.Namespace).Update(new)
+}
+
+func (c *Controller) extractNamespace(crt *v1alpha1.Certificate) (namespace string, err error) {
+	var secretNamespace string
+	if c.ServesOutsideCluster {
+		namespaceAndName := strings.SplitN(crt.Name, ".", 2)
+		if len(namespaceAndName) != 2 || strings.ContainsAny(namespaceAndName[0], ".") {
+			return "", fmt.Errorf("The certificate name \"%s\" is not of the format <namespace>.<name>", crt.Name)
+		}
+		secretNamespace = namespaceAndName[0]
+	} else {
+		secretNamespace = crt.Namespace
+	}
+	return secretNamespace, nil
 }
