@@ -45,9 +45,8 @@ type CertificateList struct {
 type KeyAlgorithm string
 
 const (
-	RSAKeyAlgorithm           KeyAlgorithm = "rsa"
-	ECDSAKeyAlgorithm         KeyAlgorithm = "ecdsa"
-	NamespaceOriginAnnotation string       = "namespace-origin"
+	RSAKeyAlgorithm   KeyAlgorithm = "rsa"
+	ECDSAKeyAlgorithm KeyAlgorithm = "ecdsa"
 )
 
 // CertificateSpec defines the desired state of Certificate

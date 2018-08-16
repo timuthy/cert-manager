@@ -108,21 +108,15 @@ func (c *Controller) buildCertificates(ing *extv1beta1.Ingress) (new, update []*
 			return nil, nil, fmt.Errorf("TLS entry %d for ingress %q must specify a secretName", i, ing.Name)
 		}
 
-		// TODO Timuthy: better handling than this branch?
-		var existingCrt *v1alpha1.Certificate
-		var err error
-		if c.watchesOutsideCluster {
-			existingCrt, err = c.certificateLister.Certificates(ing.Namespace).Get(ing.Namespace + "." + tls.SecretName)
-		} else {
-			existingCrt, err = c.certificateLister.Certificates(ing.Namespace).Get(tls.SecretName)
-		}
+		existingCrt, err := c.certificateLister.Certificates(ing.Namespace).Get(tls.SecretName)
 		if !apierrors.IsNotFound(err) && err != nil {
 			return nil, nil, err
 		}
 
 		crt := &v1alpha1.Certificate{
 			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{v1alpha1.NamespaceOriginAnnotation: ing.Namespace},
+				Name:      tls.SecretName,
+				Namespace: ing.Namespace,
 			},
 			Spec: v1alpha1.CertificateSpec{
 				DNSNames:   tls.Hosts,
@@ -134,16 +128,8 @@ func (c *Controller) buildCertificates(ing *extv1beta1.Ingress) (new, update []*
 			},
 		}
 
-		// TODO Timuthy: better handling than this branch?
-		if c.watchesOutsideCluster {
-			// Avoids name clashes for a served cluster
-			crt.Name = ing.Namespace + "." + tls.SecretName
-			crt.Namespace = c.clusterResourceNamespace
-		} else {
-			// Owner reference can only be set when Ingress is in the same cluster as Certificate
+		if !c.watchesOutsideCluster {
 			crt.OwnerReferences = []metav1.OwnerReference{*metav1.NewControllerRef(ing, ingressGVK)}
-			crt.Name = tls.SecretName
-			crt.Namespace = ing.Namespace
 		}
 
 		err = c.setIssuerSpecificConfig(crt, issuer, ing, tls)

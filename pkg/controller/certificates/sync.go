@@ -139,8 +139,7 @@ func (c *Controller) Sync(ctx context.Context, crt *v1alpha1.Certificate) (err e
 	}
 
 	// grab existing certificate and validate private key
-	namespace := getNamespaceFromCert(crt)
-	cert, err := kube.SecretTLSCert(c.secretLister, namespace, crtCopy.Spec.SecretName)
+	cert, err := kube.SecretTLSCert(c.secretLister, crtCopy.Namespace, crtCopy.Spec.SecretName)
 	// if an error is returned, and that error is something other than
 	// IsNotFound or invalid data, then we should return the error.
 	if err != nil && !k8sErrors.IsNotFound(err) && !errors.IsInvalidData(err) {
@@ -173,12 +172,7 @@ func (c *Controller) Sync(ctx context.Context, crt *v1alpha1.Certificate) (err e
 func (c *Controller) getGenericIssuer(crt *v1alpha1.Certificate) (v1alpha1.GenericIssuer, error) {
 	switch crt.Spec.IssuerRef.Kind {
 	case "", v1alpha1.IssuerKind:
-		if c.ServesOutsideCluster {
-			// Take issuer that is placed in cluster resource name space
-			return c.issuerLister.Issuers(c.ClusterResourceNamespace).Get(crt.Spec.IssuerRef.Name)
-		} else {
-			return c.issuerLister.Issuers(crt.Namespace).Get(crt.Spec.IssuerRef.Name)
-		}
+		return c.issuerLister.Issuers(crt.Namespace).Get(crt.Spec.IssuerRef.Name)
 	case v1alpha1.ClusterIssuerKind:
 		if c.clusterIssuerLister == nil {
 			return nil, fmt.Errorf("cannot get ClusterIssuer for %q as cert-manager is scoped to a single namespace", crt.Name)
@@ -197,11 +191,10 @@ func (c *Controller) scheduleRenewal(crt *v1alpha1.Certificate) {
 		return
 	}
 
-	namespace := getNamespaceFromCert(crt)
-	cert, err := kube.SecretTLSCert(c.secretLister, namespace, crt.Spec.SecretName)
+	cert, err := kube.SecretTLSCert(c.secretLister, crt.Namespace, crt.Spec.SecretName)
 
 	if err != nil {
-		runtime.HandleError(fmt.Errorf("[%s/%s] Error getting certificate '%s': %s", namespace, crt.Name, crt.Spec.SecretName, err.Error()))
+		runtime.HandleError(fmt.Errorf("[%s/%s] Error getting certificate '%s': %s", crt.Namespace, crt.Name, crt.Spec.SecretName, err.Error()))
 		return
 	}
 
@@ -210,7 +203,7 @@ func (c *Controller) scheduleRenewal(crt *v1alpha1.Certificate) {
 
 	c.scheduledWorkQueue.Add(key, renewIn)
 
-	glog.Infof("Certificate %s/%s scheduled for renewal in %d hours", namespace, crt.Name, renewIn/time.Hour)
+	glog.Infof("Certificate %s/%s scheduled for renewal in %d hours", crt.Namespace, crt.Name, renewIn/time.Hour)
 }
 
 // issuerKind returns the kind of issuer for a certificate
@@ -279,10 +272,9 @@ func (c *Controller) updateSecret(crt *v1alpha1.Certificate, namespace string, c
 // and private key will be stored in the named secret
 func (c *Controller) issue(ctx context.Context, issuer issuer.Interface, crt *v1alpha1.Certificate) error {
 	var err error
-	namespace := getNamespaceFromCert(crt)
-	glog.Infof("Preparing certificate %s/%s with issuer", namespace, crt.Name)
+	glog.Infof("Preparing certificate %s/%s with issuer", crt.Namespace, crt.Name)
 	if err = issuer.Prepare(ctx, crt); err != nil {
-		glog.Infof("Error preparing issuer for certificate %s/%s: %v", namespace, crt.Name, err)
+		glog.Infof("Error preparing issuer for certificate %s/%s: %v", crt.Namespace, crt.Name, err)
 		return err
 	}
 
@@ -294,10 +286,11 @@ func (c *Controller) issue(ctx context.Context, issuer issuer.Interface, crt *v1
 	key, cert, err = issuer.Issue(ctx, crt)
 
 	if err != nil {
-		glog.Infof("Error issuing certificate for %s/%s: %v", namespace, crt.Name, err)
+		glog.Infof("Error issuing certificate for %s/%s: %v", crt.Namespace, crt.Name, err)
 		return err
 	}
-	if _, err := c.updateSecret(crt, namespace, cert, key); err != nil {
+
+	if _, err := c.updateSecret(crt, crt.Namespace, cert, key); err != nil {
 		s := messageErrorSavingCertificate + err.Error()
 		glog.Info(s)
 		c.Recorder.Event(crt, api.EventTypeWarning, errorSavingCertificate, s)
@@ -317,10 +310,9 @@ func (c *Controller) issue(ctx context.Context, issuer issuer.Interface, crt *v1
 // and private key will be stored in the named secret
 func (c *Controller) renew(ctx context.Context, issuer issuer.Interface, crt *v1alpha1.Certificate) error {
 	var err error
-	namespace := getNamespaceFromCert(crt)
-	glog.Infof("Preparing certificate %s/%s with issuer", namespace, crt.Name)
+	glog.Infof("Preparing certificate %s/%s with issuer", crt.Namespace, crt.Name)
 	if err = issuer.Prepare(ctx, crt); err != nil {
-		glog.Infof("Error preparing issuer for certificate %s/%s: %v", namespace, crt.Name, err)
+		glog.Infof("Error preparing issuer for certificate %s/%s: %v", crt.Namespace, crt.Name, err)
 		return err
 	}
 
@@ -334,7 +326,8 @@ func (c *Controller) renew(ctx context.Context, issuer issuer.Interface, crt *v1
 	if err != nil {
 		return err
 	}
-	if _, err := c.updateSecret(crt, namespace, cert, key); err != nil {
+
+	if _, err := c.updateSecret(crt, crt.Namespace, cert, key); err != nil {
 		s := messageErrorSavingCertificate + err.Error()
 		glog.Info(s)
 		c.Recorder.Event(crt, api.EventTypeWarning, errorSavingCertificate, s)
@@ -356,15 +349,5 @@ func (c *Controller) updateCertificateStatus(old, new *v1alpha1.Certificate) (*v
 	// TODO: replace Update call with UpdateStatus. This requires a custom API
 	// server with the /status subresource enabled and/or subresource support
 	// for CRDs (https://github.com/kubernetes/kubernetes/issues/38113)
-	namespace := getNamespaceFromCert(new)
-	return c.CMClient.CertmanagerV1alpha1().Certificates(namespace).Update(new)
-}
-
-func getNamespaceFromCert(crt *v1alpha1.Certificate) string {
-	namespace, ok := crt.ObjectMeta.Annotations[v1alpha1.NamespaceOriginAnnotation]
-	if !ok {
-		// Fallback for existing installations
-		namespace = crt.Namespace
-	}
-	return namespace
+	return c.CMClient.CertmanagerV1alpha1().Certificates(new.Namespace).Update(new)
 }
