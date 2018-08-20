@@ -69,7 +69,8 @@ type Controller struct {
 	syncedFuncs []cache.InformerSynced
 	defaults    defaults
 
-	watchesOutsideCluster bool
+	watchesOutsideCluster    bool
+	clusterResourceNamespace string
 }
 
 // New returns a new Certificates controller. It sets up the informer handler
@@ -84,6 +85,7 @@ func New(
 	recorder record.EventRecorder,
 	defaults defaults,
 	watchesOutsideCluster bool,
+	clusterResourceNamespace string,
 ) *Controller {
 	ctrl := &Controller{Client: client, CMClient: cmClient, Recorder: recorder, defaults: defaults}
 	ctrl.syncHandler = ctrl.processNextWorkItem
@@ -103,6 +105,7 @@ func New(
 	ctrl.syncedFuncs = append(ctrl.syncedFuncs, clusterIssuerInformer.Informer().HasSynced)
 
 	ctrl.watchesOutsideCluster = watchesOutsideCluster
+	ctrl.clusterResourceNamespace = clusterResourceNamespace
 
 	return ctrl
 }
@@ -215,15 +218,16 @@ var keyFunc = controllerpkg.KeyFunc
 func init() {
 	controllerpkg.Register(ControllerName, func(ctx *controllerpkg.Context) controllerpkg.Interface {
 		return New(
-			ctx.SharedInformerFactory.Certmanager().V1alpha1().Certificates(),
-			ctx.ServedClusterSharedInformerFactory.Extensions().V1beta1().Ingresses(),
+			ctx.ServedClusterSharedInformerFactory.Certmanager().V1alpha1().Certificates(),
+			ctx.ServedClusterKubeSharedInformerFactory.Extensions().V1beta1().Ingresses(),
 			ctx.SharedInformerFactory.Certmanager().V1alpha1().Issuers(),
 			ctx.SharedInformerFactory.Certmanager().V1alpha1().ClusterIssuers(),
-			ctx.Client,
-			ctx.CMClient,
+			ctx.ServedClusterClient,
+			ctx.ServedClusterCMClient,
 			ctx.Recorder,
 			defaults{ctx.DefaultIssuerName, ctx.DefaultIssuerKind, ctx.DefaultACMEIssuerChallengeType, ctx.DefaultACMEIssuerDNS01ProviderName},
 			ctx.ServesOutsideCluster,
+			ctx.ClusterResourceNamespace,
 		).Run
 	})
 }

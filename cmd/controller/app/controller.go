@@ -81,6 +81,7 @@ func Run(opts *options.ControllerOptions, stopCh <-chan struct{}) {
 		ctx.SharedInformerFactory.Start(stopCh)
 		ctx.KubeSharedInformerFactory.Start(stopCh)
 		if ctx.ServesOutsideCluster {
+			ctx.ServedClusterKubeSharedInformerFactory.Start(stopCh)
 			ctx.ServedClusterSharedInformerFactory.Start(stopCh)
 		}
 		wg.Wait()
@@ -178,7 +179,9 @@ func buildControllerContext(opts *options.ControllerOptions) (*controller.Contex
 		glog.Infoln("Cert-Manager will serve an outside cluster")
 	} else {
 		context.ServedClusterClient = cl
-		context.ServedClusterSharedInformerFactory = kubeSharedInformerFactory
+		context.ServedClusterCMClient = intcl
+		context.ServedClusterKubeSharedInformerFactory = kubeSharedInformerFactory
+		context.ServedClusterSharedInformerFactory = sharedInformerFactory
 		glog.Infoln("Cert-Manager will serve this cluster")
 	}
 	return context, kubeCfg, nil
@@ -194,15 +197,22 @@ func addServedClusterConfig(context *controller.Context, namespace, secretname, 
 
 	// Create a Kubernetes api client
 	cl, err := kubernetes.NewForConfig(kubeCfg)
-
 	if err != nil {
 		return nil, fmt.Errorf("error creating kubernetes client: %s", err.Error())
 	}
 
+	intcl, err := clientset.NewForConfig(kubeCfg)
+	if err != nil {
+		return nil, fmt.Errorf("error creating internal group client: %s", err.Error())
+	}
+
 	kubeSharedInformerFactory := kubeinformers.NewSharedInformerFactory(cl, resyncRate)
+	sharedInformerFactory := informers.NewSharedInformerFactory(intcl, resyncRate)
 
 	context.ServedClusterClient = cl
-	context.ServedClusterSharedInformerFactory = kubeSharedInformerFactory
+	context.ServedClusterCMClient = intcl
+	context.ServedClusterKubeSharedInformerFactory = kubeSharedInformerFactory
+	context.ServedClusterSharedInformerFactory = sharedInformerFactory
 
 	return context, nil
 }

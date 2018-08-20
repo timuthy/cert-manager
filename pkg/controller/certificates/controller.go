@@ -65,7 +65,7 @@ func New(ctx *controllerpkg.Context) *Controller {
 	// Certificate resources when they get near to expiry
 	ctrl.scheduledWorkQueue = scheduler.NewScheduledWorkQueue(ctrl.queue.AddRateLimited)
 
-	certificateInformer := ctrl.SharedInformerFactory.Certmanager().V1alpha1().Certificates()
+	certificateInformer := ctrl.ServedClusterSharedInformerFactory.Certmanager().V1alpha1().Certificates()
 	certificateInformer.Informer().AddEventHandler(&controllerpkg.QueuingEventHandler{Queue: ctrl.queue})
 	ctrl.certificateLister = certificateInformer.Lister()
 	ctrl.syncedFuncs = append(ctrl.syncedFuncs, certificateInformer.Informer().HasSynced)
@@ -78,7 +78,7 @@ func New(ctx *controllerpkg.Context) *Controller {
 	ctrl.clusterIssuerLister = clusterIssuerInformer.Lister()
 	ctrl.syncedFuncs = append(ctrl.syncedFuncs, clusterIssuerInformer.Informer().HasSynced)
 
-	secretsInformer := ctrl.ServedClusterSharedInformerFactory.Core().V1().Secrets()
+	secretsInformer := ctrl.ServedClusterKubeSharedInformerFactory.Core().V1().Secrets()
 	secretsInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		DeleteFunc: ctrl.secretDeleted,
 	})
@@ -91,9 +91,9 @@ func New(ctx *controllerpkg.Context) *Controller {
 	// lister, and due to the way the instantiation of issuers is performed it
 	// is far more performant to perform the sync here.
 	// This will be refactored into a dedicated 'challenges' controller in future.
-	ingressInformer := ctrl.KubeSharedInformerFactory.Extensions().V1beta1().Ingresses()
-	podsInformer := ctrl.KubeSharedInformerFactory.Core().V1().Pods()
-	serviceInformer := ctrl.KubeSharedInformerFactory.Core().V1().Services()
+	ingressInformer := ctrl.ServedClusterKubeSharedInformerFactory.Extensions().V1beta1().Ingresses()
+	podsInformer := ctrl.ServedClusterKubeSharedInformerFactory.Core().V1().Pods()
+	serviceInformer := ctrl.ServedClusterKubeSharedInformerFactory.Core().V1().Services()
 
 	ctrl.syncedFuncs = append(ctrl.syncedFuncs, ingressInformer.Informer().HasSynced)
 	ctrl.syncedFuncs = append(ctrl.syncedFuncs, podsInformer.Informer().HasSynced)

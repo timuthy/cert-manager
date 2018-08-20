@@ -38,6 +38,8 @@ type Context struct {
 	ServedClusterClient kubernetes.Interface
 	// CMClient is a cert-manager clientset
 	CMClient clientset.Interface
+	// ServedClusterCMClient is a cert-manager clientset for the served cluster
+	ServedClusterCMClient clientset.Interface
 	// Recorder to record events to
 	Recorder record.EventRecorder
 
@@ -46,10 +48,13 @@ type Context struct {
 	KubeSharedInformerFactory kubeinformers.SharedInformerFactory
 	// KubeSharedInformerFactory can be used to obtain shared
 	// SharedIndexInformer instances for Kubernetes types of the served cluster
-	ServedClusterSharedInformerFactory kubeinformers.SharedInformerFactory
+	ServedClusterKubeSharedInformerFactory kubeinformers.SharedInformerFactory
 	// SharedInformerFactory can be used to obtain shared SharedIndexInformer
 	// instances
 	SharedInformerFactory informers.SharedInformerFactory
+	// ServedClusterSharedInformerFactory can be used to obtain shared SharedIndexInformer
+	// instances of the served cluster
+	ServedClusterSharedInformerFactory informers.SharedInformerFactory
 
 	IssuerOptions
 	ACMEOptions

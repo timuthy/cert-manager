@@ -65,6 +65,8 @@ func (b *Builder) Start() {
 
 	b.Client = kubefake.NewSimpleClientset(b.KubeObjects...)
 	b.CMClient = cmfake.NewSimpleClientset(b.CertManagerObjects...)
+	b.ServedClusterClient = b.Client
+	b.ServedClusterCMClient = b.CMClient
 	// create a fake recorder with a buffer of 5.
 	// this may need to be increased in future to acomodate tests that
 	// produce more than 5 events
@@ -81,6 +83,8 @@ func (b *Builder) Start() {
 	})
 	b.KubeSharedInformerFactory = kubeinformers.NewSharedInformerFactory(b.Client, informerResyncPeriod)
 	b.SharedInformerFactory = informers.NewSharedInformerFactory(b.CMClient, informerResyncPeriod)
+	b.ServedClusterKubeSharedInformerFactory = b.KubeSharedInformerFactory
+	b.ServedClusterSharedInformerFactory = b.SharedInformerFactory
 	b.stopCh = make(chan struct{})
 	b.KubeSharedInformerFactory.Start(b.stopCh)
 	b.SharedInformerFactory.Start(b.stopCh)

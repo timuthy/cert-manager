@@ -82,6 +82,8 @@ func New(ctx *controller.Context, issuer v1alpha1.GenericIssuer) (issuer.Interfa
 	}
 
 	secretsLister := ctx.KubeSharedInformerFactory.Core().V1().Secrets().Lister()
+	servedClusterSecretsLister := ctx.ServedClusterKubeSharedInformerFactory.Core().V1().Secrets().Lister()
+	// TODO (@timuthy) must be changed to served cluster?
 	podsLister := ctx.KubeSharedInformerFactory.Core().V1().Pods().Lister()
 	servicesLister := ctx.KubeSharedInformerFactory.Core().V1().Services().Lister()
 	ingressLister := ctx.KubeSharedInformerFactory.Extensions().V1beta1().Ingresses().Lister()
@@ -91,7 +93,8 @@ func New(ctx *controller.Context, issuer v1alpha1.GenericIssuer) (issuer.Interfa
 		helper:  acme.NewHelper(secretsLister, ctx.ClusterResourceNamespace),
 		issuer:  issuer,
 
-		secretsLister:  secretsLister,
+		secretsLister: servedClusterSecretsLister,
+		// TODO (@timuthy) these listers are not used at the moment
 		podsLister:     podsLister,
 		servicesLister: servicesLister,
 		ingressLister:  ingressLister,

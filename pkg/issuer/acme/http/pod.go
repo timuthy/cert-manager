@@ -106,7 +106,7 @@ func (s *Solver) cleanupPods(crt *v1alpha1.Certificate, ch v1alpha1.ACMEOrderCha
 	for _, pod := range pods {
 		// TODO: should we call DeleteCollection here? We'd need to somehow
 		// also ensure ownership as part of that request using a FieldSelector.
-		err := s.Client.CoreV1().Pods(pod.Namespace).Delete(pod.Name, nil)
+		err := s.ServedClusterClient.CoreV1().Pods(pod.Namespace).Delete(pod.Name, nil)
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -117,7 +117,7 @@ func (s *Solver) cleanupPods(crt *v1alpha1.Certificate, ch v1alpha1.ACMEOrderCha
 // createPod will create a challenge solving pod for the given certificate,
 // domain, token and key.
 func (s *Solver) createPod(crt *v1alpha1.Certificate, ch v1alpha1.ACMEOrderChallenge) (*corev1.Pod, error) {
-	return s.Client.CoreV1().Pods(crt.Namespace).Create(s.buildPod(crt, ch))
+	return s.ServedClusterClient.CoreV1().Pods(crt.Namespace).Create(s.buildPod(crt, ch))
 }
 
 // buildPod will build a challenge solving pod for the given certificate,

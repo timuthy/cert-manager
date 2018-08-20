@@ -106,7 +106,7 @@ func (s *Solver) ensureIngress(crt *v1alpha1.Certificate, svcName string, ch v1a
 // createIngress will create a challenge solving pod for the given certificate,
 // domain, token and key.
 func (s *Solver) createIngress(crt *v1alpha1.Certificate, svcName string, ch v1alpha1.ACMEOrderChallenge) (*extv1beta1.Ingress, error) {
-	return s.Client.ExtensionsV1beta1().Ingresses(crt.Namespace).Create(buildIngressResource(crt, svcName, ch))
+	return s.ServedClusterClient.ExtensionsV1beta1().Ingresses(crt.Namespace).Create(buildIngressResource(crt, svcName, ch))
 }
 
 func buildIngressResource(crt *v1alpha1.Certificate, svcName string, ch v1alpha1.ACMEOrderChallenge) *extv1beta1.Ingress {
@@ -172,11 +172,11 @@ func (s *Solver) addChallengePathToIngress(crt *v1alpha1.Certificate, svcName st
 						return ing, nil
 					}
 					rule.HTTP.Paths[i] = ingPathToAdd
-					return s.Client.ExtensionsV1beta1().Ingresses(ing.Namespace).Update(ing)
+					return s.ServedClusterClient.ExtensionsV1beta1().Ingresses(ing.Namespace).Update(ing)
 				}
 			}
 			rule.HTTP.Paths = append(rule.HTTP.Paths, ingPathToAdd)
-			return s.Client.ExtensionsV1beta1().Ingresses(ing.Namespace).Update(ing)
+			return s.ServedClusterClient.ExtensionsV1beta1().Ingresses(ing.Namespace).Update(ing)
 		}
 	}
 
@@ -189,7 +189,7 @@ func (s *Solver) addChallengePathToIngress(crt *v1alpha1.Certificate, svcName st
 			},
 		},
 	})
-	return s.Client.ExtensionsV1beta1().Ingresses(ing.Namespace).Update(ing)
+	return s.ServedClusterClient.ExtensionsV1beta1().Ingresses(ing.Namespace).Update(ing)
 }
 
 // cleanupIngresses will remove the rules added by cert-manager to an existing
@@ -214,7 +214,7 @@ func (s *Solver) cleanupIngresses(crt *v1alpha1.Certificate, ch v1alpha1.ACMEOrd
 		for _, ingress := range ingresses {
 			// TODO: should we call DeleteCollection here? We'd need to somehow
 			// also ensure ownership as part of that request using a FieldSelector.
-			err := s.Client.ExtensionsV1beta1().Ingresses(ingress.Namespace).Delete(ingress.Name, nil)
+			err := s.ServedClusterClient.ExtensionsV1beta1().Ingresses(ingress.Namespace).Delete(ingress.Name, nil)
 			if err != nil {
 				errs = append(errs, err)
 			}
@@ -224,7 +224,7 @@ func (s *Solver) cleanupIngresses(crt *v1alpha1.Certificate, ch v1alpha1.ACMEOrd
 
 	// otherwise, we need to remove any cert-manager added rules from the ingress resource
 	// TODO: switch to using ingress lister?
-	ing, err := s.Client.ExtensionsV1beta1().Ingresses(crt.Namespace).Get(existingIngressName, metav1.GetOptions{})
+	ing, err := s.ServedClusterClient.ExtensionsV1beta1().Ingresses(crt.Namespace).Get(existingIngressName, metav1.GetOptions{})
 	if k8sErrors.IsNotFound(err) {
 		glog.Infof("attempt to cleanup Ingress %q of ACME challenge path failed: %v", crt.Namespace+"/"+existingIngressName, err)
 		return nil
@@ -260,7 +260,7 @@ func (s *Solver) cleanupIngresses(crt *v1alpha1.Certificate, ch v1alpha1.ACMEOrd
 
 	ing.Spec.Rules = ingRules
 
-	_, err = s.Client.ExtensionsV1beta1().Ingresses(ing.Namespace).Update(ing)
+	_, err = s.ServedClusterClient.ExtensionsV1beta1().Ingresses(ing.Namespace).Update(ing)
 	if err != nil {
 		return err
 	}

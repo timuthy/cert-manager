@@ -92,7 +92,8 @@ func (c *Controller) Sync(ctx context.Context, ing *extv1beta1.Ingress) error {
 
 func (c *Controller) buildCertificates(ing *extv1beta1.Ingress) (new, update []*v1alpha1.Certificate, _ error) {
 	issuerName, issuerKind := c.issuerForIngress(ing)
-	issuer, err := c.getGenericIssuer(ing.Namespace, issuerName, issuerKind)
+	issuerNamespace := c.extractIssuerNamespace(ing)
+	issuer, err := c.getGenericIssuer(issuerNamespace, issuerName, issuerKind)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -115,8 +116,9 @@ func (c *Controller) buildCertificates(ing *extv1beta1.Ingress) (new, update []*
 
 		crt := &v1alpha1.Certificate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      tls.SecretName,
-				Namespace: ing.Namespace,
+				Name:            tls.SecretName,
+				Namespace:       ing.Namespace,
+				OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(ing, ingressGVK)},
 			},
 			Spec: v1alpha1.CertificateSpec{
 				DNSNames:   tls.Hosts,
@@ -126,10 +128,6 @@ func (c *Controller) buildCertificates(ing *extv1beta1.Ingress) (new, update []*
 					Kind: issuerKind,
 				},
 			},
-		}
-
-		if !c.watchesOutsideCluster {
-			crt.OwnerReferences = []metav1.OwnerReference{*metav1.NewControllerRef(ing, ingressGVK)}
 		}
 
 		err = c.setIssuerSpecificConfig(crt, issuer, ing, tls)
@@ -314,4 +312,13 @@ func (c *Controller) getGenericIssuer(namespace, name, kind string) (v1alpha1.Ge
 	default:
 		return nil, fmt.Errorf(`invalid value %q for issuer kind. Must be empty, %q or %q`, kind, v1alpha1.IssuerKind, v1alpha1.ClusterIssuerKind)
 	}
+}
+
+// If an outside cluster is served the issuer is placed in cluster-resource-namespace.
+// Else it corresponds to the namespace of the ingress
+func (c *Controller) extractIssuerNamespace(ing *extv1beta1.Ingress) (namespace string) {
+	if c.watchesOutsideCluster {
+		return c.clusterResourceNamespace
+	}
+	return ing.Namespace
 }

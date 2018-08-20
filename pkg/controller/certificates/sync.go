@@ -172,7 +172,8 @@ func (c *Controller) Sync(ctx context.Context, crt *v1alpha1.Certificate) (err e
 func (c *Controller) getGenericIssuer(crt *v1alpha1.Certificate) (v1alpha1.GenericIssuer, error) {
 	switch crt.Spec.IssuerRef.Kind {
 	case "", v1alpha1.IssuerKind:
-		return c.issuerLister.Issuers(crt.Namespace).Get(crt.Spec.IssuerRef.Name)
+		issuerNamespace := c.extractIssuerNamespace(crt)
+		return c.issuerLister.Issuers(issuerNamespace).Get(crt.Spec.IssuerRef.Name)
 	case v1alpha1.ClusterIssuerKind:
 		if c.clusterIssuerLister == nil {
 			return nil, fmt.Errorf("cannot get ClusterIssuer for %q as cert-manager is scoped to a single namespace", crt.Name)
@@ -349,5 +350,14 @@ func (c *Controller) updateCertificateStatus(old, new *v1alpha1.Certificate) (*v
 	// TODO: replace Update call with UpdateStatus. This requires a custom API
 	// server with the /status subresource enabled and/or subresource support
 	// for CRDs (https://github.com/kubernetes/kubernetes/issues/38113)
-	return c.CMClient.CertmanagerV1alpha1().Certificates(new.Namespace).Update(new)
+	return c.ServedClusterCMClient.CertmanagerV1alpha1().Certificates(new.Namespace).Update(new)
+}
+
+// If an outside cluster is served the issuer is placed in cluster-resource-namespace.
+// Else it corresponds to the namespace of the certificate
+func (c *Controller) extractIssuerNamespace(crt *v1alpha1.Certificate) (namespace string) {
+	if c.ServesOutsideCluster {
+		return c.ClusterResourceNamespace
+	}
+	return crt.Namespace
 }
