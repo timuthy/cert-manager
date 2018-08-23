@@ -58,9 +58,8 @@ type ControllerOptions struct {
 	// DNS01Nameservers allows specifying a list of custom nameservers to perform DNS checks
 	DNS01Nameservers []string
 
-	// ServedClusterSecretName contains the Kubeconfig for the cluster which is served by Cert-Manager
-	ServedClusterSecretName    string
-	ServedClusterKubeConfigKey string
+	// ServedClusterKubeConfig represents the path to the served cluster's Kubeconfig
+	ServedClusterKubeConfig string
 }
 
 const (
@@ -173,11 +172,8 @@ func (s *ControllerOptions) AddFlags(fs *pflag.FlagSet) {
 	fs.StringSliceVar(&s.DNS01Nameservers, "dns01-self-check-nameservers", []string{}, ""+
 		"A list of comma seperated DNS server endpoints used for DNS01 check requests. "+
 		"This should be a list containing IP address and port, for example: 8.8.8.8:53,8.8.4.4:53")
-	fs.StringVar(&s.ServedClusterSecretName, "served-cluster-secret-name", "", ""+
-		"With this option in place, Cert-Manager will serve a cluster with certificates which is different from the one it runs in. "+
-		"Therefore Cert-Manager needs the name of a secret containing the served cluster's Kubeconfig")
-	fs.StringVar(&s.ServedClusterKubeConfigKey, "served-cluster-kube-config-key", "kubeconfig", ""+
-		"Required if --served-cluster-kube-config-field is set. Denotes the key whose value is the Base64 encoded Kubeconfig")
+	fs.StringVar(&s.ServedClusterKubeConfig, "served-cluster-kube-config", "", ""+
+		"Path to the served cluster's Kubeconfig")
 }
 
 func (o *ControllerOptions) Validate() error {

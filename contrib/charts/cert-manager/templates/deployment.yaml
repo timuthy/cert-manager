@@ -61,8 +61,7 @@ spec:
           {{- end }}
           {{- end }}
           {{- if .Values.servedClusterConfig.secretName }}
-          - --served-cluster-secret-name={{ .Values.servedClusterConfig.secretName }}
-          - --served-cluster-kube-config-key={{ .Values.servedClusterConfig.kubeConfigKey }}
+          - --served-cluster-kube-config=/etc/served-cluster-config/{{ .Values.servedClusterConfig.kubeConfigKey }}
           {{- end}}
           env:
           - name: POD_NAMESPACE
@@ -84,8 +83,19 @@ spec:
           - name: NO_PROXY
             value: {{ .Values.no_proxy }}
           {{- end }}
+          {{- if .Values.servedClusterConfig.secretName }}
+          volumeMounts:
+          - name: served-cluster-config
+            mountPath: "/etc/served-cluster-config"
+          {{- end }}
           resources:
 {{ toYaml .Values.resources | indent 12 }}
+        {{- if .Values.servedClusterConfig.secretName }}
+      volumes:
+        - name: served-cluster-config
+          secret:
+            secretName: {{ .Values.servedClusterConfig.secretName }}
+        {{- end }}
     {{- with .Values.nodeSelector }}
       nodeSelector:
 {{ toYaml . | indent 8 }}

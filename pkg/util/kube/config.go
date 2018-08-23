@@ -19,12 +19,7 @@ package kube
 import (
 	"fmt"
 
-	"github.com/golang/glog"
 	"github.com/jetstack/cert-manager/pkg/util"
-	"github.com/jetstack/cert-manager/pkg/util/errors"
-	"k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -55,42 +50,4 @@ func KubeConfig(apiServerHost string) (*rest.Config, error) {
 	cfg.UserAgent = util.CertManagerUserAgent
 
 	return cfg, nil
-}
-
-// ConfigFromSecret will return a rest.Config for communicating with the Kubernetes API server.
-// The instance from rest.Config is created out of a secret within the cluster which contains a Base64 encoded Kubeconfig.
-func ConfigFromSecret(namespace, secretname, kubeConfigKey string) (*rest.Config, error) {
-	cfg, err := rest.InClusterConfig()
-	if err != nil {
-		glog.Errorln("An error occurred while getting the in-cluster config")
-		return nil, err
-	}
-	clientset, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		glog.Errorln("An error occurred while creating a clientset out of the in-cluster config")
-		return nil, err
-	}
-
-	secret, err := clientset.CoreV1().Secrets(namespace).Get(secretname, metav1.GetOptions{})
-	if err != nil {
-		glog.Errorf("Secret with name %s is not available in namespace %s\n", secretname, namespace)
-		return nil, err
-	}
-
-	return newRESTConfigFromSecret(secret, kubeConfigKey)
-}
-
-func newRESTConfigFromSecret(secret *v1.Secret, kubeconfigKey string) (*rest.Config, error) {
-	kubeConfigData, ok := secret.Data[kubeconfigKey]
-	if !ok {
-		err := errors.NewInvalidData("Invalid Kubeconfig key %s for secret %s", kubeconfigKey, secret.GetName())
-		return nil, err
-	}
-	cfg, err := clientcmd.Load(kubeConfigData)
-	if err != nil {
-		return nil, err
-	}
-
-	clientConfig := clientcmd.NewDefaultClientConfig(*cfg, &clientcmd.ConfigOverrides{})
-	return clientConfig.ClientConfig()
 }

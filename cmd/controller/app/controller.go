@@ -29,6 +29,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
@@ -168,11 +169,10 @@ func buildControllerContext(opts *options.ControllerOptions) (*controller.Contex
 		},
 	}
 
-	context.ServesOutsideCluster = len(opts.ServedClusterSecretName) > 0
+	context.ServesOutsideCluster = len(opts.ServedClusterKubeConfig) > 0
 	if context.ServesOutsideCluster {
 		var err error
-		context, err = addServedClusterConfig(context, opts.ClusterResourceNamespace,
-			opts.ServedClusterSecretName, opts.ServedClusterKubeConfigKey)
+		context, err = addServedClusterConfig(context, opts.ServedClusterKubeConfig)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -187,9 +187,13 @@ func buildControllerContext(opts *options.ControllerOptions) (*controller.Contex
 	return context, kubeCfg, nil
 }
 
-func addServedClusterConfig(context *controller.Context, namespace, secretname, key string) (*controller.Context, error) {
+func addServedClusterConfig(context *controller.Context, servedClusterKubeConfigLocation string) (*controller.Context, error) {
 	// Load the users Kubernetes config
-	kubeCfg, err := kube.ConfigFromSecret(namespace, secretname, key)
+	if _, err := os.Stat(servedClusterKubeConfigLocation); os.IsNotExist(err) {
+		return nil, fmt.Errorf("kubeconfig file does not exist: %s", servedClusterKubeConfigLocation)
+	}
+
+	kubeCfg, err := clientcmd.BuildConfigFromFlags("", servedClusterKubeConfigLocation)
 
 	if err != nil {
 		return nil, fmt.Errorf("error creating rest config: %s", err.Error())
